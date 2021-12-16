@@ -102,24 +102,6 @@ run()
  * The variable lastMatchID keeps track of the most recent match the player with playerID has 
  * had added to the SQL database. 
  */
-// By using the lastMatchID, CheckMatches is only run from the most recent match to the most recently added match
-async function CheckMatches(parsed, i) {
-
-    //A timeout is used as to not overflow API calls. 60 API calls may be made per minute, 
-    //so a slightly longer than 1 second timeout is used to be safe
-    setTimeout(function () {
-
-        if (parsed[i] != null && parsed[i].match_id > lastMatchID) { //If the match returned from the API call is more recent that the most recently added match,
-            console.log('Adding match ' + parsed[i].match_id);                         //then it adds the new match to the database
-            AddMatchToDB(parsed[i].match_id);
-            CheckMatches(parsed, i + 1);    //calls CheckMatch on the next most recent match
-        }
-        else {
-            console.log('Done updating!');
-        }
-    }, 1200); 
-
-}
 
 //The API request players/playerid/matches returns an ENTIRE history of matches played, in order from most recent
 //to oldest. By using the matchID, CheckMatches above is only run from the most recent match 
@@ -143,6 +125,24 @@ function GrabNewMatches() {
     })
 }
 
+// By using the lastMatchID, CheckMatches is only run from the most recent match to the most recently added match
+async function CheckMatches(parsed, i) {
+
+    //A timeout is used as to not overflow API calls. 60 API calls may be made per minute, 
+    //so a slightly longer than 1 second timeout is used to be safe
+    setTimeout(function () {
+
+        if (parsed[i] != null && parsed[i].match_id > lastMatchID) { //If the match returned from the API call is more recent that the most recently added match,
+            console.log('Adding match ' + parsed[i].match_id);                         //then it adds the new match to the database
+            AddMatchToDB(parsed[i].match_id);
+            CheckMatches(parsed, i + 1);    //calls CheckMatch on the next most recent match
+        }
+        else {
+            console.log('Done updating!');
+        }
+    }, 1200); 
+
+}
 
 function AddMatchToDB(MatchID) {
     const request = require('request');
@@ -152,6 +152,13 @@ function AddMatchToDB(MatchID) {
 
             //Parse the player info
             var parsed = JSON.parse(body);
+
+            if (parsed.players[9] === undefined) {
+                console.log('Players are undefined. Match ' + MatchID + ' aborted');
+
+                return;
+            }
+
 
             var DidIWin = 0;
             for (var i = 0; i < 10; i++) {

@@ -1,12 +1,4 @@
-﻿/*
-var http = require('http');
-http.createServer(function (req, res) {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Hello World\n');
-}).listen(1337, '127.0.0.1');
-console.log('Server running at http://127.0.0.1:1337/');
-*/
-
+﻿
 
 //Main globals, loaded in at the PRELOAD section
 var lastMatchID;
@@ -27,7 +19,7 @@ connection.connect(function (err) {
 })
 
 //:::::::::::::::::::::::::PRELOAD DATA FROM JSON FILE:::::::::::::::::::
-
+var storageSetup;
 const fs = require('fs');
 const fileName = './storage.json' //File that stores releveant info to ensure not too many calls are made
 const file = require(fileName); //Used later on to update the file
@@ -36,12 +28,13 @@ fs.readFile(fileName, 'utf8', (err, data) => { //Reads the filename setup, to lo
     if (err)
         throw err;
     else {
-        const storageSetup = JSON.parse(data);
-
+        storageSetup = JSON.parse(data);
+        set = storageSetup;
         lastMatchID = storageSetup.PlayerInfo.LastMatchID;  //Loads the lastMatchID, which keeps track of the last match added to the SQL file
         console.log("Last Match Parsed: " + lastMatchID);
         playerID = storageSetup.PlayerInfo.PlayerID;        //Loads the playerID, used for API calls to find your player info from OPENDOTA
-        console.log("Player ID: "  +playerID);
+        console.log("Player ID: " + playerID);
+        //console.log(storageSetup.Heroes[1]);
     }
 })
 
@@ -59,7 +52,7 @@ function MenuLoop() {
         readline.on('line', function (line) {
             if (line === "exit" || line === "quit" || line == 'q') {
                 readline.close()
-                return // bail here, so rl.prompt() isn't called again
+                return // bail
             }
             else if (line === "help" || line === '?') {
                 console.log(`Commands List \n 1. "games" for match history\n 2. "exit" to exit`)
@@ -70,13 +63,21 @@ function MenuLoop() {
             else if (line === "update") {
                 GrabNewMatches();
             }
+        /*    else if (line == "hero") {
+                for (var j = 136; j > 0; j--) {
+                    connection.query("UPDATE dota SET Hero = REPLACE(Hero, '" +
+                        j + "', '" + storageSetup.Heroes[j] + "');", function (err, result, fields) {
+
+                            if (err) throw err;// if any error while executing above query, throw error
+                        });
+                }
+            }*/
             else {
                 console.log(`unknown command: "${line}". For command list, type "help"`)
             }
             readline.prompt()
 
         }).on('close', function () {
-            console.log('bye')
             resolve(42) // this is the final result of the function
         });
     })
@@ -153,20 +154,23 @@ function AddMatchToDB(MatchID) {
             //Parse the player info
             var parsed = JSON.parse(body);
 
+            //Checks to make sure that 10 people are in the game. If not, the game is canceled
             if (parsed.players[9] === undefined) {
                 console.log('Players are undefined. Match ' + MatchID + ' aborted');
-
                 return;
             }
 
-
+            //Finds the user. This is important for two reasons.
+            //1. To not flood the database with your own stats.
+            //2. To know if you won the game or not. Better to judge people knowing they won/lost
             var DidIWin = 0;
             for (var i = 0; i < 10; i++) {
-                if (parsed.players[i].account_id === playerID) {
+                if (parsed.players[i].account_id === Number(playerID)) {
                     DidIWin = parsed.players[i].win;
                 }
             }
 
+            //Establishes the date/time the game was played
             var d = new Date(parsed.start_time * 1000);
 
             //Makes an SQL call for every other player in the game
@@ -179,8 +183,8 @@ function AddMatchToDB(MatchID) {
                         MatchID + ', ' +
                         parsed.players[i].win + ', ' +
                         DidIWin + ', ' +
-                        parsed.players[i].hero_id + ', ' +
-                        "'" + d.getDate() + '/' + (d.getMonth()) + '/' + d.getFullYear() + " " + d.getHours() + ':' + d.getMinutes() + "', " +
+                        storageSetup[parsed.players[i].hero_id] + ', ' +
+                        "'" + d.getMonth() + '/' + (d.getDate()) + '/' + d.getFullYear() + " " + d.getHours() + ':' + d.getMinutes() + "', " +
                         "'" + Math.floor(parsed.duration/60) + ':' + parsed.duration%60  + "');", function (err, result, fields) {
                             if (err) throw err;// if any error while executing above query, throw error
 
@@ -193,9 +197,6 @@ function AddMatchToDB(MatchID) {
     })
 }
 // console.log(parsed.players[0].account_id);
-
-
-
 
 //::::::::::::::::::::FUNCTIONS FOR SEARCHING THE DATABASE MATCH HISTORY:::::::::::::::::::::::
 

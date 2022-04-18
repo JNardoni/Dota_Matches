@@ -9,9 +9,9 @@ var mysql = require('mysql');
 
 var connection = mysql.createConnection({
     host: "localhost",
-    user: "JSBot",
-    password: "XXXX",
-    database: "XXXX"
+    user: "JSBot",    
+    database: "XXXX",
+    password: "XXXX"
 })
 
 connection.connect(function (err) {
@@ -55,9 +55,9 @@ function MenuLoop() {
                 return // bail
             }
             else if (line === "help" || line === '?') {
-                console.log(`Commands List \n 1. "games" for match history\n 2. "exit" to exit`)
+                console.log(`Commands List \n 1. "games" for match history\n 2. "update" to update the match history"\n 3. "exit" to exit`)
             }
-            else if (line === "history") {
+            else if (line === "history" || line === "games") {
                 SearchMatchHistory();
             }
             else if (line === "update") {
@@ -149,8 +149,6 @@ function AddMatchToDB(MatchID) {
     const request = require('request');
     request('https://api.opendota.com/api/matches/' + MatchID, function (error, response, body) {
         if (!error && response.statusCode == 200) {
-           // 
-
             //Parse the player info
             var parsed = JSON.parse(body);
 
@@ -198,18 +196,55 @@ function AddMatchToDB(MatchID) {
 }
 // console.log(parsed.players[0].account_id);
 
+
+
 //::::::::::::::::::::FUNCTIONS FOR SEARCHING THE DATABASE MATCH HISTORY:::::::::::::::::::::::
 
 
+
+//  Allows the user to input player ids, which are looked up in the match history, and the info is given back to the user
+//          Params: None
+//          Returns: None
 function SearchMatchHistory() {
-    connection.query("SELECT * FROM dota", function (err, result, fields) {
-        // if any error while executing above query, throw error
-        if (err) throw err;
-        // if there is no error, you have the result
-        console.log(result);
-    });
+
+    var entry = "";
+
+    //Continues until the user exits
+    while (entry != "exit") {
+
+        //Prompt to get an input for searching
+        readline.setPrompt('Searching your match history! Enter a player id to see, or type "exit" to exit\n');
+        readline.prompt();
+
+        readline.on('line', function (line) {
+
+            if (line === "exit" || line === "quit" || line == 'q') {  //If exit, quits the loop and returns to the main menu
+                break;
+            }
+            else if (isNumeric(line)) { //Checks if the input is numeric or not. playerid is always a number, which allows this to both save time if a non-number is entered,
+                // and disallow and SQL injection
+                connection.query("SELECT * FROM dota WHERE playerID =" + line, function (err, result, fields) {
+                    // if any error while executing above query, throw error
+                    if (err) throw err;
+                    // if there is no error, you have the result
+                    console.log(result);
+                })
+            }
+            else {
+                console.log("Not a valid player id\n");
+            }
+        };
+    }
 }
 
+// Checks whether a variable is numeric or not. Returns true if numeric, false if not
+//      Params: String var
+//      Returns: Bool
+function isNumeric(var line) {
+    return parseInt(line);
+
+
+}
 
 
 

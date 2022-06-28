@@ -1,8 +1,4 @@
-{
-  "PlayerInfo": {
-    "LastMatchID": 0,
-    "PlayerID": "XXXX"
-  },
+{ 
   "Heroes": {
       "1": "Antimage",
       "2": "Axe",

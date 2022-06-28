@@ -1,17 +1,20 @@
 ﻿
 
 //Main globals, loaded in at the PRELOAD section
-var lastMatchID;
-var playerID;
+//var lastMatchID;
+//var playerID;
 
 //::::::::::::::::::::::CONNECTING TO THE MYSQL SERVER::::::::::::::::
 var mysql = require('mysql');
 
+//Database and Player info
+var secrets = require('./secrets.js');
+
 var connection = mysql.createConnection({
-    host: "localhost",
-    user: "JSBot",    
-    database: "XXXX",
-    password: "XXXX"
+    host: request.host,
+    user: request.user,
+    password: request.password,
+    database: request.database
 })
 
 connection.connect(function (err) {
@@ -31,9 +34,9 @@ fs.readFile(fileName, 'utf8', (err, data) => { //Reads the filename setup, to lo
         storageSetup = JSON.parse(data);
         set = storageSetup;
         lastMatchID = storageSetup.PlayerInfo.LastMatchID;  //Loads the lastMatchID, which keeps track of the last match added to the SQL file
-        console.log("Last Match Parsed: " + lastMatchID);
+        console.log("Last Match Parsed: " + request.LastMatchID);
         playerID = storageSetup.PlayerInfo.PlayerID;        //Loads the playerID, used for API calls to find your player info from OPENDOTA
-        console.log("Player ID: " + playerID);
+        console.log("Player ID: " + request.PlayerID);
         //console.log(storageSetup.Heroes[1]);
     }
 })

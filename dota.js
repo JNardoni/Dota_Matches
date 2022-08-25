@@ -11,10 +11,10 @@ var mysql = require('mysql');
 var secrets = require('./secrets.js');
 
 var connection = mysql.createConnection({
-    host: request.host,
-    user: request.user,
-    password: request.password,
-    database: request.database
+    host: secrets.host,
+    user: secrets.user,
+    password: secrets.password,
+    database: secrets.database
 })
 
 connection.connect(function (err) {
@@ -32,12 +32,15 @@ fs.readFile(fileName, 'utf8', (err, data) => { //Reads the filename setup, to lo
         throw err;
     else {
         storageSetup = JSON.parse(data);
-        set = storageSetup;
-        lastMatchID = storageSetup.PlayerInfo.LastMatchID;  //Loads the lastMatchID, which keeps track of the last match added to the SQL file
-        console.log("Last Match Parsed: " + request.LastMatchID);
-        playerID = storageSetup.PlayerInfo.PlayerID;        //Loads the playerID, used for API calls to find your player info from OPENDOTA
-        console.log("Player ID: " + request.PlayerID);
-        //console.log(storageSetup.Heroes[1]);
+      //  set = storageSetup;
+        lastMatchID = secrets.LastMatchID;  //Loads the lastMatchID, which keeps track of the last match added to the SQL file
+        console.log("Last Match Parsed: " + lastMatchID);
+        playerID = secrets.PlayerID;        //Loads the playerID, used for API calls to find your player info from OPENDOTA
+        console.log("Player ID: " + playerID);
+        lastHeroID = secrets.LastHeroID;  //Loads the last match for thee individual heroes
+        console.log("Last Hero WR Update: " + lastHeroID);
+
+     //   console.log(storageSetup.Heroes[1]);
     }
 })
 
@@ -65,6 +68,9 @@ function MenuLoop() {
             }
             else if (line === "update") {
                 GrabNewMatches();
+            }
+            else if (line === "heroes") {
+                GrabMyHeroes();
             }
         /*    else if (line == "hero") {
                 for (var j = 136; j > 0; j--) {
@@ -98,6 +104,79 @@ async function run() {
 
 run()
 
+
+//::::::::::::::::::FUNCTIONS FOR UPDATING THE SQL DATABASE WITH MY HERO HISTORY:::::::::::::::::
+/**
+ * Breaks down my individual heroes to make more dynamic recommendations
+ *
+ */
+
+function GrabMyHeroes() {
+    const request = require('request');
+    request('https://api.opendota.com/api/players/' + playerID + '/matches', function (error, response, body) {
+        if (!error && response.statusCode == 200) {
+            var parsed = JSON.parse(body);
+
+            var i = 0;
+
+                //All info is contained in a single RESTful call. Pulls all the needed info from there
+                while (parsed[i] != undefined && parsed[i].match_id > lastHeroID) {
+
+                    console.log('Adding match ' + parsed[i].match_id);
+
+                    //Slight delay to make sure multiple versions of the same tables arent being made
+                    AddToHeroDB(parsed[i]);
+
+                    i++;                                        
+                }
+
+            //Update the last pulled ID
+            secrets.LastHeroID = parsed[0].match_id; //Updates the ID in program memory
+        }
+    });
+}
+
+//Adds the hero info to the database. Will create the table if needed, then add the hero
+function AddToHeroDB(parsed) {
+
+    if (parsed === undefined) {
+        return;
+    }
+
+    if (parsed.leaver_status == 1 || parsed.game_mode != 22) {
+        console.log('Invalid match');
+        return;
+    }
+
+    //Check to seee if the Hero Table exists. If not, create it
+    connection.query('SELECT * FROM ' + storageSetup.Heroes[parsed.hero_id], function (err, res, fields) {
+        if (err) {
+            connection.query('CREATE TABLE ' + storageSetup.Heroes[parsed.hero_id] +
+                ' (Kills int NOT NULL, Deaths int NOT NULL, Assists int NOT NULL, Win tinyint(1) NOT NULL);');
+        }
+    });
+    
+    //Check to see if the match was a victory of not. Can only compare to radiant
+    var DidIWin = 0;
+    if ((parsed.radiant_win == 1 && parsed.player_slot < 5) || (parsed.radiant_win != 1 && parsed.player_slot > 4)) {
+        DidIWin = 1;
+    }
+    
+   //Add the info to the hero table
+    connection.query("INSERT INTO " + storageSetup.Heroes[parsed.hero_id]  + " VALUES (" +
+        parsed.kills + ", " +
+        parsed.deaths + ', ' +
+        parsed.assists + ', ' +
+        DidIWin + ')', function (err, result, fields) {
+            if (err) throw err;// if any error while executing above query, throw error
+
+        });
+
+    console.log('Sucesfully added match');
+
+}
+
+
 //::::::::::::::::::FUNCTIONS FOR UPDATING THE SQL DATABASE WITH MATCH HISTORY:::::::::::::::::
 /*The SQL database keeps track of all matches played, and all opponenets in these matches.
  * It updates based on the playerID in the storage.json file
@@ -118,7 +197,7 @@ function GrabNewMatches() {
             var parsed = JSON.parse(body);
 
             //Update the last match ID in the storage JSON file
-            file.PlayerInfo.LastMatchID = parsed[0].match_id; //Updates the JSON in program memory
+            secrets.LastMatchID = parsed[0].match_id; //Updates the JSON in program memory
 
             fs.writeFile(fileName, JSON.stringify(file), function writeJSON(err) { //Actually writes it to file
                 if (err) return console.log(err);
@@ -184,7 +263,7 @@ function AddMatchToDB(MatchID) {
                         MatchID + ', ' +
                         parsed.players[i].win + ', ' +
                         DidIWin + ', ' +
-                        storageSetup[parsed.players[i].hero_id] + ', ' +
+                        storageSetup.Heroes[parsed.players[i].hero_id] + ', ' +
                         "'" + d.getMonth() + '/' + (d.getDate()) + '/' + d.getFullYear() + " " + d.getHours() + ':' + d.getMinutes() + "', " +
                         "'" + Math.floor(parsed.duration/60) + ':' + parsed.duration%60  + "');", function (err, result, fields) {
                             if (err) throw err;// if any error while executing above query, throw error
@@ -222,7 +301,7 @@ function SearchMatchHistory() {
         readline.on('line', function (line) {
 
             if (line === "exit" || line === "quit" || line == 'q') {  //If exit, quits the loop and returns to the main menu
-                break;
+                entry = "exit";
             }
             else if (isNumeric(line)) { //Checks if the input is numeric or not. playerid is always a number, which allows this to both save time if a non-number is entered,
                 // and disallow and SQL injection
@@ -236,21 +315,15 @@ function SearchMatchHistory() {
             else {
                 console.log("Not a valid player id\n");
             }
-        };
+        });
     }
 }
 
 // Checks whether a variable is numeric or not. Returns true if numeric, false if not
 //      Params: String var
 //      Returns: Bool
-function isNumeric(var line) {
+function isNumeric(line) {
     return parseInt(line);
 
 
 }
-
-
-
-
-
-
